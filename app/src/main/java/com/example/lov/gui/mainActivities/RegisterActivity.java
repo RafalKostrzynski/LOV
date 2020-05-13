@@ -30,7 +30,6 @@ public class RegisterActivity extends AppCompatActivity {
     RadioGroup radioGroup;
     RadioButton radioButton1, radioButton2;
 
-
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
