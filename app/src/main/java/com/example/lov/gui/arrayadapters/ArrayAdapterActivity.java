@@ -56,10 +56,7 @@ public class ArrayAdapterActivity extends BaseAdapter implements ListAdapter {
         activityWeight.setText(Integer.toString(newActivity.getActivityPoints()));
         activityUnit.setText(newActivity.getActivityUnit());
         activityText.setText(newActivity.getActivityName());
-
-        Button completeActivityButton =  view.findViewById(R.id.activity_completed);
-        Button failedActivityButton =  view.findViewById(R.id.activity_failed);
-        Button editActivityButton =  view.findViewById(R.id.modify_activity);
+        activityAmount.setText(Integer.toString(newActivity.getActivityAmount()));
 
         return view;
     }
