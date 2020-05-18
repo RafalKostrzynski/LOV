@@ -1,8 +1,7 @@
 package com.example.lov.gui.mainActivities;
 
-import androidx.appcompat.app.AppCompatActivity;
-
 import android.content.Intent;
+import android.os.AsyncTask;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.Button;
@@ -14,16 +13,17 @@ import android.widget.Toast;
 
 import com.example.lov.DB.DataBaseHandler;
 import com.example.lov.R;
+import com.example.lov.service.GMailSender;
 
 import java.io.UnsupportedEncodingException;
+import java.lang.ref.WeakReference;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+
+import androidx.appcompat.app.AppCompatActivity;
 
 public class RegisterActivity extends AppCompatActivity {
 
-    DataBaseHandler dataBaseHandler;
     EditText password, passwordRep, userName, email, emailRep;
     TextView goToLogin;
     Button registerBtn;
@@ -46,7 +46,18 @@ public class RegisterActivity extends AppCompatActivity {
         registerBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                register(view);
+                long startTime = System.nanoTime();
+                registerForAsync(view);
+                long endTime = System.nanoTime();
+                System.out.print("Normal method executiontime: " + (endTime-startTime));
+
+                //AsycTask for register
+                startTime = System.nanoTime();
+                new MyAsyncTask(RegisterActivity.this).execute();
+                endTime = System.nanoTime();
+                System.out.println("AsyncTast method executiontime: " +(endTime-startTime));
+
+                startActivity(new Intent(RegisterActivity.this, LoginActivity.class));
             }
         });
     }
@@ -62,59 +73,39 @@ public class RegisterActivity extends AppCompatActivity {
         radioGroup = findViewById(R.id.radioGroup);
         radioButton1 = findViewById(R.id.radio1);
         radioButton2 = findViewById(R.id.radio2);
-        dataBaseHandler = new DataBaseHandler(this);
+        //  dataBaseHandler = new DataBaseHandler(this);
     }
-
-    public void register(View view) {
+    public void registerForAsync(View view) {
         String user = userName.getText().toString();
         String pass = password.getText().toString();
-        String passRep = passwordRep.getText().toString();
         String mail = email.getText().toString();
-        String mailRep = emailRep.getText().toString();
 
-        String regex = "^(.+)@(.+)$";
-        Pattern pattern = Pattern.compile(regex);
-        Matcher matcher = pattern.matcher(mail);
-        if (user.equals("") || pass.equals("") || passRep.equals("") || mail.equals("") || mailRep.equals(""))
-            Toast.makeText(getApplicationContext(), "Fields are empty", Toast.LENGTH_SHORT).show();
-        else if (user.length() < 6)
-            Toast.makeText(getApplicationContext(), "Username is too short", Toast.LENGTH_SHORT).show();
-        else if (user.length() > 15)
-            Toast.makeText(getApplicationContext(), "Username is too long", Toast.LENGTH_SHORT).show();
-        else if (!matcher.matches())
-            Toast.makeText(getApplicationContext(), "Its not a real email", Toast.LENGTH_SHORT).show();
-        else if (pass.length() < 6)
-            Toast.makeText(getApplicationContext(), "Password is too short", Toast.LENGTH_SHORT).show();
-        else if (pass.length() > 15)
-            Toast.makeText(getApplicationContext(), "Password is too long", Toast.LENGTH_SHORT).show();
-        else if (radioGroup.getCheckedRadioButtonId()==-1)
-            Toast.makeText(getApplicationContext(), "Choose an avatar", Toast.LENGTH_SHORT).show();
-        else if (user.equals(pass))
-            Toast.makeText(getApplicationContext(), "Username and password cant be the same", Toast.LENGTH_SHORT).show();
-        else if (pass.equals(passRep) && mail.equals(mailRep)) {
-            try {
-                Boolean checkUser = dataBaseHandler.checkUserName(user);
-                if (checkUser) {
-                    Boolean checkEmail = dataBaseHandler.checkEmail(mail);
-                    if (checkEmail) {
-                        String avatar= avatarPath();
-                        Boolean insert = dataBaseHandler.insertUserIntoDataBase(user, mail, SHA1(pass),avatar,0);
-                        if (!insert)
-                            Toast.makeText(getApplicationContext(), "Something went wrong please try again", Toast.LENGTH_LONG).show();
-                        else {
-                            Toast.makeText(getApplicationContext(), "Account created you can login now", Toast.LENGTH_SHORT).show();
-
-
-                            startActivity(new Intent(RegisterActivity.this, LoginActivity.class));
-                        }
-                    } else
-                        Toast.makeText(getApplicationContext(), "This email Already exists", Toast.LENGTH_SHORT).show();
-                } else
-                    Toast.makeText(getApplicationContext(), "This username Already exists", Toast.LENGTH_SHORT).show();
-            } catch (Exception e) {
+        DataBaseHandler dataBaseHandler = new DataBaseHandler(this);
+        String avatar= avatarPath();
+        try {
+            boolean insert = dataBaseHandler.insertUserIntoDataBase(user, mail, SHA1(pass),avatar,0);
+            if (!insert)
                 Toast.makeText(getApplicationContext(), "Something went wrong please try again", Toast.LENGTH_LONG).show();
+            else {
+                Toast.makeText(getApplicationContext(), "Account created you can login now", Toast.LENGTH_SHORT).show();
             }
+        } catch (NoSuchAlgorithmException e) {
+            e.printStackTrace();
+        } catch (UnsupportedEncodingException e) {
+            e.printStackTrace();
         }
+        try {
+            GMailSender sender = new GMailSender("yanooooo69@gmail.com", "kapelusz");
+            sender.sendMail("This is Subject",
+                    "This is Body",
+                    "yanooooo69@gmail.com",
+                    mail);
+        } catch (Exception e) {
+            Toast toast = Toast.makeText(this,
+                    "Coś poszło nie tak z wysłaniem emaila", Toast.LENGTH_SHORT);
+            toast.show();
+        }
+
     }
 
     private String avatarPath() {
@@ -134,5 +125,98 @@ public class RegisterActivity extends AppCompatActivity {
             sb.append(String.format("%02x", b));
         }
         return sb.toString();
+    }
+    @Override
+    public void onBackPressed(){
+    }
+
+
+    public static class MyAsyncTask extends AsyncTask<Void, Void, Boolean> {
+
+        private WeakReference<RegisterActivity> registerActivityWeakReference;
+        private String username;
+        private String pass;
+        private String mail;
+        private String avatar;
+
+        MyAsyncTask(RegisterActivity registerActivity) {
+            registerActivityWeakReference = new WeakReference<RegisterActivity>(registerActivity);
+        }
+
+        @Override
+        protected void onPreExecute() {
+            super.onPreExecute();
+            RegisterActivity registerActivity = registerActivityWeakReference.get();
+            if(registerActivity==null || registerActivity.isFinishing()){
+                return;
+            }
+            username = registerActivity.userName.getText().toString();
+            pass = registerActivity.password.getText().toString();
+            mail = registerActivity.email.getText().toString();
+            avatar="";
+
+            int selectedId = registerActivity.radioGroup.getCheckedRadioButtonId();
+            RadioButton radioButton = registerActivity.findViewById(selectedId);
+            if(radioButton == registerActivity.findViewById(R.id.radio1)) avatar= "drawable/profile1.jpg";
+            else{
+                avatar= "drawable/profile2.jpg";
+            }
+        }
+
+        @Override
+        protected Boolean doInBackground(Void... probUser) {
+            RegisterActivity registerActivity = registerActivityWeakReference.get();
+            if(registerActivity==null || registerActivity.isFinishing()){
+                return false;
+            }
+            publishProgress();
+            try {
+                GMailSender sender = new GMailSender("yanooooo69@gmail.com", "kapelusz");
+                sender.sendMail("This is Subject",
+                        "This is Body",
+                        "yanooooo69@gmail.com",
+                        mail);
+                return true;
+            } catch (Exception e) {
+                Toast toast = Toast.makeText(registerActivity,
+                        "Something went wrong with sending email", Toast.LENGTH_SHORT);
+                toast.show();
+                return false;
+            }
+        }
+
+        @Override
+        protected void onProgressUpdate(Void... values) {
+            super.onProgressUpdate();
+            RegisterActivity registerActivity = registerActivityWeakReference.get();
+            if(registerActivity==null || registerActivity.isFinishing()){
+                return;
+            }
+
+            DataBaseHandler databaseHelper= new DataBaseHandler(registerActivity);
+            try {
+                databaseHelper.insertUserIntoDataBase(username, mail, SHA1(pass),avatar,0);
+            } catch (NoSuchAlgorithmException e) {
+                e.printStackTrace();
+            } catch (UnsupportedEncodingException e) {
+                e.printStackTrace();
+            }
+
+        }
+        @Override
+        protected void onPostExecute(Boolean success) {
+            super.onPostExecute(success);
+            RegisterActivity registerActivity = registerActivityWeakReference.get();
+            if(registerActivity==null || registerActivity.isFinishing()){
+                return;
+            }
+            if (!success) {
+                Toast toast = Toast.makeText(registerActivity,
+                        "Cant send an email", Toast.LENGTH_SHORT);
+                toast.show();
+            } else{
+                Toast.makeText(registerActivity, "Account created you can login now", Toast.LENGTH_SHORT).show();
+            }
+        }
     }
 }
